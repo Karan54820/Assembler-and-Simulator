@@ -1,0 +1,306 @@
+import sys
+import re
+f=open("test.txt",'r')
+f2=open("test_result.txt",'w')
+input_list=[]
+answer=[]
+variables=[]
+var_value=[]
+labels=[]
+labels_val=[]
+opcode={'add':'00000','sub':'00001','mov1':'00010','mov2':'00011','ld':'00100','st':'00101',
+        'mul':'00110','div':'00111','rs':'01000','ls':'01001','xor':'01010','or':'01011',
+        'and':'01100','not':'01101','cmp':'01110','jmp':'01111','jlt':'11100','jgt':'11101',
+        'je':'11111','hlt':'11010'}
+register={'R0':'000','R1':'001','R2':'010','R3':'011','R4':'100','R5':'101','R6':'110','FLAGS':'111'}
+register1={'R0':0,'R1':0,'R2':0,'R3':0,'R4':0,'R5':0,'R6':0}
+flags = {'V': 0, 'L': 0, 'G': 0, 'E': 0}
+stmtypes = {"add": "A", "sub": "A", "mov1": "B", "mov2": "C", "ld": "D", "st": "D", 
+            "mul": "A", "div": "C", "rs": "B","ls": "B", "xor": "A", "or": "A",
+             "and": "A", "not": "C", "cmp": "C", "jmp": "E", "jlt": "E", "jgt": "E",
+             "je": "E", "hlt": "F",}
+
+# for line in f:
+#     input_list.append(line.strip().split(' '))
+# lines=[]
+for line in f:
+    line =line.strip()
+    if not  line:
+        continue #remove whit e
+    splt=[splt.strip() for splt in line.split()]
+    input_list.append(splt)# splititng into variable ....
+print(input_list)
+
+def var_error(list):
+    var_error=0
+    if input_list[0][0]=='var':
+        for i in range(1,len(input_list)):
+            if input_list[i][0]=='var':
+                if input_list[i-1][0]!='var':
+                    var_error=1
+                    return var_error
+    else:
+        var_error=1
+        return var_error
+
+for i in input_list:
+    if i[0][-1]==':':
+        labels.append(i[0][:-1]) 
+
+
+    if i[0]=='mov':
+        
+
+        if (i[2][1]=='$'):
+            register1[i[1]]=int(i[2][1:])
+            answer.append(opcode['mov1'])
+
+        else:
+            answer.append(opcode['mov2'])
+    if i[0] in opcode:
+        answer.append(opcode[i[0]])
+    if i[0]=='var':
+        variables.append(i[1])
+        counter=0
+        bincounter=bin(counter)[2:]# removing 0b and bin for conversion 
+        var_value.append("{0:07b}".format(len(variables)))
+    if (i[-1])[-1]==':':
+        labels.append(i[0][:-1])
+        # f2.write(labels)
+    if i[0][-1]==":":
+        counter=0
+        bincounter=bin(counter)[2:]# removing 0b and bin for conversion 
+        # f2.write(bincounter)
+        labels_val.append("{0:07b}".format(len(labels)))
+# f2.write(labels_val)
+       
+#     #CHECKING FOR OVERFLOW IN ADD    
+    if i[0]=='add' and len(i)==4:
+        register1[i[1]]=register1[i[2]]+register1[i[3]]
+        if len(bin(register1[i[1]])[2:])>len(bin(register1[i[2]])[2:]) or len(bin(register1[i[1]])[2:]) > len (bin(register1[i[3]])[2:]):
+            flags['V']=1
+            register1[i[1]]=0
+
+    #CHECKING FOR OVERFLOW IN SUBTRACT
+    elif i[0]=='sub' and len(i)==4:
+        register1[i[1]]=register1[i[2]]-register1[i[3]]
+        if bin(register1[i[2]])[2:]<bin(register1[i[3]])[2:]:
+            flags['V']=1
+            register1[i[1]]=0
+
+#CHECKING FOR OVERFLOW IN MULTIPLY
+    elif i[0]=='mul' and len(i)==4:
+        register1[i[1]]=register1[i[2]]-register1[i[3]]
+        if len(bin(register1[i[1]])[2:])>len(bin(register1[i[2]])[2:]) or len(bin(register1[i[1]])[2:]) > len (bin(register1[i[3]])[2:]):
+            flags['V']=1
+            register1[i[1]]=0
+
+#CHECKING FOR OVERFLOW IN DIVISION
+    elif i[0]=='div' and len(i)==3:
+        if register1[i[2]]==0:
+            register1['R0']=0
+        else:
+            register1['R0']=int(register1[i[1]]/register1[i[2]])
+            register1["R1"]=register1[i[1]]%register1[i[2]]
+            if register1[i[2]]==0:
+                flags['V']=1
+                register1["R0"]=0
+                register1["R1"]=0
+
+#   CHECKING FOR COMPARE FUNCTION     
+    elif i[0]=='cmp' and len(i)==3:
+        if register1[i[1]]<register1[i[2]]:
+            flags['L']=1
+
+        elif register1[i[1]]>register1[i[2]]:
+            flags['G']=1
+
+        elif register1[i[1]]<register1[i[2]]:
+            flags['E']=1
+copy_list=input_list.copy()
+for i in input_list:
+    if i[0][:-1] in labels:
+        i.remove(i[0])
+        
+# print(labels)
+print(input_list)
+# f2.write(labels_val)
+# f2.write(var_value)
+error=0
+def check_error(input_list):
+    global error
+    count=1
+    count_1=0
+    if ['hlt'] not in input_list:
+        f2.write("Missing hlt instructions \n")
+        error=1
+    for i in input_list:
+        if i[0]=='var':
+            if var_error(input_list)==1 and count_1==0:
+                f2.write("Variable not declared in the beginning \n")
+                error=1
+                count_1=1
+           
+        elif i[0]=='mov':
+            if i[1] in register and (i[2]=="FLAGS" or i[2][0]=='$' or i[2] in register):
+                continue
+            else:
+                f2.write("Illegal use of flag register \n")
+                error=1
+        elif i[0] not in opcode:
+            error=1
+            f2.write("Error in line no:"+str(i)+str(copy_list.index(i)+1)+"\n")
+        else:
+            newstmtyp=stmtypes[i[0]]
+            if newstmtyp=='A':
+                for j in i[1:]:
+                    if j not in register:
+                        error=1
+                        f2.write("Invalid Register"+str(i)+str(copy_list.index(i)+1)+"\n")
+                    else :
+                        continue
+            elif newstmtyp=='B':
+                if i[1] not in register:
+                    error=1
+                    f2.write("Invalid register"+str(i)+str(copy_list.index(i)+1)+"\n")
+                elif (i[2][1:].isdigit() and (int (i[2][1:])>127 or int(i[2][1:])<0)):
+                    error=1
+                    f2.write("Invalid Imm value"+str(i)+str(copy_list.index(i)+1)+"\n")
+            elif newstmtyp=='C':
+                for k in i[1:]:
+                    if k not in register:
+                        error=1
+                        f2.write("Invalid Register"+str(i)+str(copy_list.index(i)+1)+"\n")       
+                    else:
+                        continue
+            elif newstmtyp=="D":
+                if i[1] not in register:
+                    error=1
+                    f2.write("Invalid register"+str(i)+str(copy_list.index(i)+1)+"\n")
+                elif i[2] not in variables:
+                    error=1
+                    f2.write("Invalid varibale"+str(i)+str(copy_list.index(i)+1)+"\n")
+            elif newstmtyp=="E":
+                if i[1] not in labels: 
+                    error=1
+                    f2.write("label not found "+str(i)+str(copy_list.index(i)+1)+str('\n'))
+                else:
+                    continue
+            elif newstmtyp=='F':
+                if (copy_list.index(i)+1)<len(copy_list):
+                    error=1
+                    f2.write("hlt is not being used at last \n")
+                else:
+                    continue
+            count+=1
+
+
+check_error(input_list)
+   
+if error == 0:
+    binarycode=''
+    for i in input_list:
+        oprtins=i[0]
+        if oprtins=="mov":  # for move 
+            if i[2][0]=="$":
+                oprtins="mov1"
+            else:
+                oprtins="mov2"
+        if oprtins=="var":
+            continue
+        else:
+            newstmtyp=stmtypes[oprtins]
+        # f2.write(newstmtyp,oprtins)
+
+        #TYPE A
+        if newstmtyp=="A":
+            register_1_name = i[1]
+            register_2_name = i[2]
+            register_3_name = i[3]
+            if i[0]== "add":
+                binarycode += "0000000"
+            elif i[0]== "sub":
+                binarycode += "0000100"
+            elif i[0]== "mul":
+                binarycode += "0011000"
+            elif i[0]== "xor":
+                binarycode += "0101000"
+            elif i[0]== "or":
+                binarycode += "0101100"
+            elif i[0]== "and":
+                binarycode += "0110000"
+            if register_1_name in register:
+                binarycode += register[register_1_name]
+            if register_2_name in register:
+                binarycode += register[register_2_name]
+            if register_1_name in register:
+                binarycode += register[register_3_name]
+            f2.write(binarycode+"\n")
+            
+            binarycode=''
+        #TYPE B
+        if newstmtyp=="B":
+            register_1_name = i[1]
+            if oprtins == "mov1":
+                binarycode += "000100"
+            elif i[0]== "rs":
+                binarycode += "010000"
+            elif i[0]== "ls":
+                binarycode += "010010"
+            if register_1_name in register:
+                binarycode += register[register_1_name]
+            binary_imm = str(bin(int(i[2][1:]))[2:])
+            binarycode+="0"*(7-len(binary_imm))+binary_imm
+            f2.write(binarycode + "\n")
+            binarycode=''
+        # imm value
+
+        #TYPE C
+        if newstmtyp=="C":
+            register_1_name = i[1]
+            register_2_name = i[2]
+            if oprtins == "mov2":
+                binarycode += "0001100000"
+            elif i[0]== "div":
+                binarycode += "0011100000"
+            elif i[0]== "not":
+                binarycode += "0110100000"
+            elif i[0]== "cmp":
+                binarycode += "0111000000"    
+            if register_1_name in register:
+                binarycode += register[register_1_name]
+            if register_2_name in register:
+                binarycode += register[register_2_name]
+            f2.write(binarycode +"\n")
+            binarycode=''
+        #TYPE D
+        if newstmtyp=="D":
+            register_1_name = i[1]
+            if i[0] == "ld":
+                binarycode += "001000"
+            elif i[0]== "st":
+                binarycode += "001010"
+            if register_1_name in register:
+                binarycode += register[register_1_name]
+            binarycode+= var_value[(variables.index(i[2]))]
+            f2.write(binarycode +"\n")
+            binarycode=''
+        #TYPE E
+        if newstmtyp == 'E':
+            if i[0] == "jmp":
+                binarycode += "011110000"
+            elif i[0]== "jlt":
+                binarycode += "111000000"
+            elif i[0]== "jgt":
+                binarycode += "111010000"
+            elif i[0]== "je":
+                binarycode += "111110000"
+            binarycode+= labels_val[(labels.index(i[1]))]
+            f2.write(binarycode +"\n")
+            binarycode=''
+            
+        #TYPE F
+        if newstmtyp=='F':
+            binarycode+="1101000000000000"
+            f2.write(binarycode+"\n")
+
